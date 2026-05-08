@@ -1,50 +1,53 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Lee云平台 软件开发宪章
 
-## Core Principles
+## 核心原则
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### 一、data-testid 属性强制规范
+所有可交互组件必须添加 `data-testid` 属性，作为元素标识的首选方式。禁止使用 CSS 类名、标签层级或 XPath 作为主要元素选择器。
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+`data-testid` 命名必须遵循语义化规则：
+- 格式：`[功能模块]-[元素类型]`，如 `username-input`、`login-button`
+- 使用小写英文单词，以连字符 `-` 分隔
+- 名称需清晰表达元素用途，避免 `div1`、`btn2` 等无意义命名
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+## 附加约束
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### 组件级要求
+1. 所有可交互组件（按钮、输入框、下拉框、复选框、开关等）必须添加 `data-testid`
+2. 表单类组件必须包含完整的验证状态标识
+3. 异步操作组件必须包含加载状态和结果状态的标识
+4. 所有 `data-testid` 必须在组件文档中声明并维护
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### 端到端流程要求
+1. 关键用户流程必须有完整的页面元素标识覆盖
+2. 登录、注册、支付等核心流程必须完全遵循 `data-testid` 规范
+3. 跨浏览器兼容性验证必须基于统一的 `data-testid` 契约
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### 选择器优先级
+元素选择器使用优先级（从高到低）：
+1. `data-testid`（首选）
+2. `aria-label`（无障碍场景）
+3. `role` + `name`（WAI-ARIA 语义）
+4. 其他选择器（不推荐，需说明理由）
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## 开发工作流
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### 代码审查要求
+1. 所有 PR 必须验证 `data-testid` 覆盖率（所有可交互组件）
+2. 新增页面/组件必须包含对应的 `data-testid` 标识
+3. 修改现有组件时，必须确保关联的元素标识同步更新
+4. 禁止在未添加 `data-testid` 的情况下合并涉及 UI 变更的 PR
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### 质量门禁
+1. 所有可交互组件的 `data-testid` 覆盖率必须达到 100%
+2. 新增组件不得遗漏 `data-testid` 属性
+3. 标识命名必须符合语义化规则
+4. 所有页面元素标识必须可稳定定位
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+## 治理
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+本宪法为项目最高级别的开发规范，所有代码提交、PR 审查、架构决策必须遵循本文件要求。任何对本宪法的修改需要经过团队评审并更新本文档。
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+前端开发人员在实现任何 UI 组件时，必须按照本宪法规约添加 `data-testid` 属性，确保所有可交互元素具有稳定、唯一的标识。
+
+**版本**：1.0.0 | **生效日期**：2026-05-08 | **最后修订**：2026-05-08
