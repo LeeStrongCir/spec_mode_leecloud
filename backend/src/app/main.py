@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
@@ -13,16 +19,16 @@ from app.api.login_record import router as login_record_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- startup: seed admin user ---
     from sqlalchemy import select
-    from app.db import engine, async_session_factory
+
+    from app.db import async_session_factory
     from app.models.user import User, UserStatus
     from app.services.password_service import hash_password
 
     async with async_session_factory() as session:
-        result = await session.execute(select(User).where(User.username == "admin"))
-        existing_admin = result.scalars().first()
-        if existing_admin is None:
+        existing_admin = await session.execute(select(User).where(User.username == "admin"))
+        admin = existing_admin.scalars().first()
+        if admin is None:
             admin = User(
                 username="admin",
                 email="admin@example.com",
@@ -34,10 +40,15 @@ async def lifespan(app: FastAPI):
             await session.commit()
 
     yield
-    # --- shutdown ---
 
 
-# --- RedirectToLogin exception handler (SSR auth pages) ---
+app = FastAPI(
+    title="Lee Cloud Platform",
+    version="0.2.0",
+    lifespan=lifespan,
+)
+
+
 @app.exception_handler(RedirectToLogin)
 async def redirect_handler(request: Request, exc: RedirectToLogin):
     return RedirectResponse(url=exc.redirect_url, status_code=303)
@@ -55,12 +66,6 @@ templates = Jinja2Templates(directory="frontend/templates")
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
 
-# --- RedirectToLogin exception handler (SSR auth pages) ---
-@app.exception_handler(RedirectToLogin)
-async def redirect_handler(request: Request, exc: RedirectToLogin):
-    return RedirectResponse(url=exc.redirect_url, status_code=303)
-
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -70,13 +75,20 @@ app.include_router(login_record_router)
 app.include_router(auth_router)
 
 
-
-
 @app.get("/console", response_class=HTMLResponse)
 async def console_page(request: Request, user=Depends(require_auth)):
     return templates.TemplateResponse(
         request,
         "console.html",
+        context={"user": user},
+    )
+
+
+@app.get("/console-full", response_class=HTMLResponse)
+async def console_full_page(request: Request, user=Depends(require_auth)):
+    return templates.TemplateResponse(
+        request,
+        "console-full.html",
         context={"user": user},
     )
 
@@ -98,9 +110,7 @@ async def login_history_page(request: Request):
     )
 
 
-@app.get(
-    "/admin/login-records", response_class=HTMLResponse
-)
+@app.get("/admin/login-records", response_class=HTMLResponse)
 async def admin_login_records_page(request: Request):
     return templates.TemplateResponse(
         request,

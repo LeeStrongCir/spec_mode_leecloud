@@ -1,130 +1,151 @@
-# Feature Specification: LECS Host Management
+# Feature Specification: LECS Hosts Management
 
 **Feature Branch**: `007-lecs-hosts`  
-**Created**: 2026-05-08  
+**Created**: 2026-05-09  
 **Status**: Draft  
-**Input**: User description: "LECS主机（云服务器）功能开发：支持在控制台搜索、列表查看、创建/删除/查询LECS主机，前端页面风格与控制台保持一致"  
-**Source**: `reqs/需求规格说明书-LECS主机.md`
+**Input**: User description: "LECS主机（云服务器）功能开发：支持在控制台搜索、列表查看、创建、开关机控制及删除操作，前端页面风格与控制台保持一致"
+
+---
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Search and Navigate to LECS Host List from Console (Priority: P1)
+### User Story 1 - Search and Navigate to LECS Hosts List (Priority: P1)
 
-A logged-in administrator or standard user searches for "LECS Host" or "Cloud Server" in the top search bar of the Lee Cloud Console. The search results display a "LECS Host" option. Clicking the result navigates the user directly to the LECS Host List page.
+After logging into the Lee Cloud Platform console, a user types "LECS主机" or "云服务器" in the top search bar. The search results intelligently match and display a "LECS Hosts" entry with highlighted keywords. Clicking the entry navigates directly to the LECS hosts list page.
 
-**Why this priority**: This is the primary entry point for users to discover and access the LECS Host management feature. Without this, users cannot find the feature at all.
+**Why this priority**: This is the primary entry point for all LECS host functionality. Without discoverable navigation, users cannot access any host management features.
 
-**Independent Test**: Can be fully tested by entering "LECS主机" or "云服务器" in the console search bar, confirming the "LECS主机" option appears in results, clicking it, and verifying the browser navigates to the LECS Host List page.
+**Independent Test**: Can be fully tested by searching for "LECS" or "云服" in the console search bar and verifying the result appears with highlighted keywords, then clicking to confirm navigation to the list page.
 
 **Acceptance Scenarios**:
 
-1. **Given** the user is logged into the console, **When** they type "LECS主机" in the search bar, **Then** the search results show a "LECS主机" option with the matching keyword highlighted
-2. **Given** the user is logged into the console, **When** they type "云服务器" (synonym) in the search bar, **Then** the search results show a "LECS主机" option as a synonym match
-3. **Given** the search results display the "LECS主机" option, **When** the user clicks on it, **Then** the browser navigates to the LECS Host List page
+1. **Given** the user is logged into the console, **When** they type "LECS" or "云服" in the search bar, **Then** the dropdown results display "LECS主机" with the search term highlighted.
+2. **Given** the search results show "LECS主机", **When** the user clicks the entry, **Then** the browser navigates to the LECS hosts list page and it loads successfully.
 
 ---
 
-### User Story 2 - View LECS Host List with Status Dashboard (Priority: P1)
+### User Story 2 - View LECS Hosts List with Action Matrix (Priority: P1)
 
-A logged-in user accesses the LECS Host List page and sees a comprehensive status dashboard with five statistics (Monitoring Alerts, Security Risks, Pending Renewals, UniAgent Not Installed, Configuration Reminders), action buttons for bulk operations, a search/filter bar for finding hosts by name, and a data table with columns: Name/ID, Monitoring, Security, Status, Availability Zone, Spec/Image, Operation Group, IP Address, Billing Mode, Tags, and Actions. If no hosts exist in the current region, an empty state is displayed with a "Purchase Elastic Cloud Server" button.
+Upon entering the list page, the user sees a data table displaying host information: host name/ID, billing mode, runtime status (color-coded badges), private IP, and an action column. The page header includes only a "Create ECS Host" button on the right—no global toolbar. The action column contains **Shutdown**, **Start**, and **Delete** buttons. Button availability strictly follows a state machine: operations not supported by the current host state are automatically grayed out and disabled. Hosts marked as "deleted" do not appear in the list.
 
-**Why this priority**: The list page is the central management interface for all LECS Host operations. Every subsequent action originates from here.
+**Why this priority**: The list page is the central resource management interface. Accurate status visualization and precise action controls are essential for safe operations.
 
-**Independent Test**: Can be fully tested by navigating to the LECS Host List page URL and verifying: the two tab options (Cloud Servers / Recycle Bin), the five status statistics display, the action buttons (Start, Stop, Restart, Reset Password, Renew, More, Export), the search filter bar, the table column headers match the reference design, and when no data exists, the empty state with the purchase button and region selector is shown.
+**Independent Test**: Create hosts in different states (normal, creating, stopped, deleting, etc.) and verify status badge rendering, action button enable/disable logic, and soft-deleted hosts' list visibility.
 
 **Acceptance Scenarios**:
 
-1. **Given** the user is authenticated and in region "华北-北京四", **When** they access the LECS Host List page, **Then** the page displays two tabs: "云服务器" (selected by default) and "回收站"
-2. **Given** the user is viewing the LECS Host List page, **When** they look at the status dashboard, **Then** they see five statistics: 监控告警, 安全风险, 待续费, 未安装UniAgent, 配置提醒 — all showing numeric counts
-3. **Given** the user views the list page actions toolbar, **When** they look at available buttons, **Then** they see: 开机 (Start), 关机 (Stop), 重启 (Restart), 重置密码 (Reset Password), 续费 (Renew), 更多 (More dropdown), 导出 (Export dropdown)
-4. **Given** the current region has no LECS Host data, **When** the user views the table area, **Then** an empty state is displayed with: an empty box icon, text "暂无表格数据", region explanation text, a "购买弹性云服务器" button, and a region dropdown selector
-5. **Given** the current region has LECS Host data, **When** the user views the table area, **Then** a data grid is displayed with rows containing host information and per-row action links
+1. **Given** the list page has data, **When** the user views the action column, **Then** each row displays "Shutdown", "Start", and "Delete" buttons.
+2. **Given** a host is in "Normal" state, **When** viewing the action column, **Then** "Shutdown" is clickable; "Start" and "Delete" are grayed out.
+3. **Given** a host is in "Stopped" state, **When** viewing the action column, **Then** "Start" and "Delete" are clickable; "Shutdown" is grayed out.
+4. **Given** a host is in "Creation Failed" state, **When** viewing the action column, **Then** only "Delete" is clickable; others are grayed out.
+5. **Given** a host is "Deleting", **When** viewing the action column, **Then** the status shows "Deleting" and all action buttons are grayed out.
+6. **Given** a host has been deleted, **When** the user refreshes the list page, **Then** the host no longer appears in the list.
 
 ---
 
-### User Story 3 - Create a New LECS Host (Priority: P2)
+### User Story 3 - Create a LECS Host (Priority: P2)
 
-A logged-in user clicks the "购买弹性云服务器" (Purchase Elastic Cloud Server) button on the LECS Host List page. They are taken to the LECS Host Creation page, which guides them through six configuration sections in sequence: Basic Configuration (billing mode and region), Instance Selection (compute spec with vCPU/memory/disk), OS Image Selection (choose from available OS images), Public Network Access (elastic public IP and bandwidth configuration), Purchase Quantity (duration and number of instances), and finally the Configuration Fees display with a "立即购买" (Purchase Now) submit button.
+From the list page, the user clicks "Create ECS Host" to enter the creation page. They configure six sections in sequence: Basic Configuration (billing mode, hostname, access credentials), Instance Configuration (instance type and specific spec), Operating System (image selection), IP Configuration (DHCP or manual), Purchase Duration, and Cost Confirmation. After reviewing all choices in a confirmation dialog, they submit the creation. The front-end immediately returns to the list page showing "Creating" status, while the back-end completes resource provisioning within 30 seconds, ultimately transitioning to "Normal" or "Creation Failed".
 
-**Why this priority**: Creating cloud server instances is the core value proposition of this feature. Users obtain computing resources through this workflow.
+**Why this priority**: Resource delivery is the core user path. Form complexity and cost calculation accuracy directly impact user conversion.
 
-**Independent Test**: Can be fully tested by navigating to the creation page, configuring each section (billing mode, region, instance spec, OS image, public network access, purchase duration and quantity), verifying the total fee updates dynamically with each selection change, and confirming the submission flow triggers a creation request.
+**Independent Test**: Complete the full creation flow, verify form validation, confirm dialog content completeness, and verify list page status refresh after submission.
 
 **Acceptance Scenarios**:
 
-1. **Given** the user is on the LECS Host List page, **When** they click "购买弹性云服务器", **Then** they are navigated to the LECS Host Creation page
-2. **Given** the user is on the Creation page, **When** they view the layout, **Then** they see six configuration sections in order: 基础配置 (Basic Config), 实例 (Instance), 操作系统 (OS), 公网访问 (Public Network Access), 购买量 (Purchase Quantity), and 配置费用说明与购买 (Config Fees & Purchase)
-3. **Given** the user configures each section's options, **When** they change any selection, **Then** the configuration fees display updates to reflect the current total
-4. **Given** the user has completed all configuration sections, **When** they click "立即购买", **Then** a creation request is submitted and a success or error notification is displayed to the user
+1. **Given** the user is on the list page, **When** they click "Create ECS Host", **Then** the creation page loads showing six configuration sections, purchase duration selector, and a cost display area.
+2. **Given** all form fields pass validation, **When** the user clicks "Buy Now" and confirms in the dialog (showing the full configuration summary including duration and cost), **Then** the host quota check passes, the page navigates to the list, and the new host appears with "Creating" status.
+
+---
+
+### User Story 4 - Control Host Lifecycle (Shutdown/Start) (Priority: P3)
+
+From the list page's action column, the user clicks "Shutdown" or "Start" based on the host's current state. When "Normal", clicking "Shutdown" transitions the status to "Shutting Down" asynchronously (approximately 10 seconds), then completes to "Stopped". When "Stopped" or "Creation Failed", clicking "Start" transitions to "Starting" (approximately 10 seconds), then completes to "Normal". During any intermediate state ("Creating", "Shutting Down", "Starting", "Deleting"), all action buttons are disabled to prevent conflicting operations.
+
+**Why this priority**: Enables users to control service availability—stopping services for cost savings (stop-and-save) or recovering from failures.
+
+**Independent Test**: Cover the complete state machine flow: Normal → Shutting Down → Stopped → Starting → Normal, verifying async timing and conflict prevention logic.
+
+**Acceptance Scenarios**:
+
+1. **Given** a host is "Normal", **When** the user clicks "Shutdown", **Then** the button immediately grays out, status changes to "Shutting Down". After approximately 10 seconds, status becomes "Stopped" and "Start" becomes available.
+2. **Given** a host is "Stopped", **When** the user clicks "Start", **Then** the button grays out, status changes to "Starting". After approximately 10 seconds, status becomes "Normal" and "Shutdown" becomes available.
+3. **Given** a host is in "Shutting Down" transitional state, **When** the user clicks "Shutdown" or "Start", **Then** buttons are disabled and the system rejects any duplicate requests.
+
+---
+
+### User Story 5 - Safely Delete a Host (Priority: P4)
+
+From the list page, the user deletes a host under strict state restrictions. Delete is only permitted when the host is fully stopped ("Stopped") or in an error state ("Creation Failed"). After clicking "Delete", a confirmation dialog appears. Upon confirmation, the host status changes to "Deleting" asynchronously (2–5 seconds). The operation performs a soft delete: the host record is retained in the database but filtered out from the list view, and the quota count decreases by 1.
+
+**Why this priority**: Completes the host lifecycle. Restricting deletion to stopped/error states prevents data loss and resource leaks. The async mechanism ensures smooth front-end experience and eventual state consistency.
+
+**Independent Test**: Verify that normal-state hosts cannot be deleted, stopped-state hosts trigger async deletion, and quota is successfully released.
+
+**Acceptance Scenarios**:
+
+1. **Given** a host is "Normal", "Creating", or "Shutting Down", **When** the user attempts to delete, **Then** the button is grayed out or clicking shows the message "Please shut down the host before deleting" and blocks submission.
+2. **Given** a host is "Stopped" or "Creation Failed", **When** the user clicks "Delete" and confirms the dialog, **Then** status changes to "Deleting", all action buttons gray out. After 3–5 seconds, the row disappears from the list and the top quota count decreases by 1.
 
 ---
 
 ### Edge Cases
 
-- What happens when an unauthenticated user directly navigates to the LECS Host List page URL? → Should be redirected to the login page
-- How does the system handle creation errors returned by the backend API? → Display specific error messages to the user (quota exceeded, invalid parameters, etc.)
-- What is displayed when the current region has no LECS Host data? → Show an empty state page with a prompt and a "Purchase Elastic Cloud Server" button
-- What happens when the purchase quantity exceeds the user's quota (200 hosts)? → Block submission and prompt the user with a quota exceeded message plus an application entry for expansion
-- What happens when a single creation request exceeds 100 hosts? → Block submission and prompt "一次最多可以创建100台云服务器"
-- What happens when a public IP is required but resources are insufficient? → Display a friendly error message to the user
-- What happens when a user attempts to delete a running LECS Host? → Confirm if the user wants to stop the host first before deletion
-
----
+- **Quota limit**: When the user's total host count (including all non-deleted records: normal, shutting down, stopped, creation failed, deleting) reaches **100**, creation is blocked with the message "Host count limit reached".
+- **Timeout degradation**: If the back-end creation task exceeds timeout (> 60s), the host status is forcibly degraded to "Creation Failed" and front-end polling stops to prevent infinite "Creating" loops.
+- **Concurrency lock**: While a row is in an async operation (shutting down, deleting, etc.), the action column buttons are strictly disabled, blocking any clicks.
+- **Network disconnection**: Operations attempted during network loss trigger a full list refresh (refetch) upon reconnection, ensuring display state is consistent with the database.
+- **Billing on stopped hosts (on-demand mode)**: When a host is "Stopped" in on-demand billing, compute resources (CPU/RAM) are released and billing stops, but storage resources (disk/image) continue to incur storage fees.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: System MUST allow users to find "LECS Host" via the console search bar using both "LECS主机" and "云服务器" (synonym) as search terms
-- **FR-002**: System MUST display the LECS Host List page with two tabs: "云服务器" and "回收站", defaulting to "云服务器"
-- **FR-003**: System MUST display five status statistics on the list page: 监控告警 (Monitoring Alerts), 安全风险 (Security Risks), 待续费 (Pending Renewals), 未安装UniAgent (UniAgent Not Installed), 配置提醒 (Configuration Reminders)
-- **FR-004**: System MUST display action buttons on the list page: 开机 (Start), 关机 (Stop), 重启 (Restart), 重置密码 (Reset Password), 续费 (Renew), 更多 (More), 导出 (Export)
-- **FR-005**: System MUST display a data table with columns: 名称/ID, 监控, 安全, 状态, 可用区, 规格/镜像, 操作组, IP地址, 计费模式, 标签, 操作
-- **FR-006**: System MUST display an empty state with a purchase button when no LECS Host data exists in the selected region
-- **FR-007**: System MUST provide a search/filter bar on the list page that filters hosts by name
-- **FR-008**: System MUST provide a region selector dropdown on the list page empty state
-- **FR-009**: System MUST navigate users to the LECS Host Creation page when they click "购买弹性云服务器"
-- **FR-010**: System MUST display six configuration sections on the Creation page in order: 基础配置 (Billing Mode + Region), 实例 (Instance Spec Selection), 操作系统 (OS Image Selection), 公网访问 (Public Network Access), 购买量 (Purchase Duration + Quantity), 配置费用说明与购买 (Fees Display + Purchase Button)
-- **FR-011**: System MUST support two billing modes: 包年/包月 (Monthly/Yearly Prepaid) and 按需计费 (On-Demand/Postpaid)
-- **FR-012**: System MUST provide instance type tabs: 经济型 (Economy), 高性价比型 (High Cost-Performance), 高性能型 (High Performance), with multiple spec cards under each showing vCPU, memory, system disk, and monthly price
-- **FR-013**: System MUST provide a grid of OS image choices including Huawei Cloud EulerOS, CentOS, SUSE, Ubuntu, Debian, OpenSUSE, AlmaLinux, Rocky Linux, CentOS Stream, CoreOS, openEuler, SUSE SAP, and Windows
-- **FR-014**: System MUST provide public network access toggle with bandwidth billing mode (按带宽计费/按流量计费) and bandwidth size selection (1-2000 Mbps)
-- **FR-015**: System MUST provide purchase duration selection (1-12 months, 1-3 years) and purchase quantity (1-100), with auto-renewal option for prepaid billing
-- **FR-016**: System MUST display the total configuration fees dynamically and provide a link to billing details
-- **FR-017**: System MUST support the backend API for creating a new LECS Host instance with full configuration parameters
-- **FR-018**: System MUST support the backend API for deleting an existing LECS Host instance
-- **FR-019**: System MUST support the backend API for querying LECS Hosts with pagination, region filter, status filter, and name search
-- **FR-020**: System MUST add `data-testid` attributes to all interactive components on the LECS Host pages (buttons, inputs, selects, checkboxes, radio groups, etc.)
-- **FR-021**: System MUST enforce quota limits: maximum 200 hosts per user, maximum 100 hosts per single creation request
-- **FR-022**: System MUST enforce bandwidth range: 1-2000 Mbps
-- **FR-023**: System MUST require host security protection to be enabled by default during creation (configurable)
+- **FR-001**: The system MUST provide a searchable entry point in the console search bar that matches "LECS主机" and "云服务器" with keyword highlighting, and navigates to the LECS hosts list page upon click.
+- **FR-002**: The system MUST display a list of hosts in a data table showing host name/ID, billing mode, runtime status, private IP, and an action column with shutdown, start, and delete buttons.
+- **FR-003**: The system MUST enforce a state machine for action button availability: only operations compatible with the current host state are enabled; all others are disabled and visually grayed out.
+- **FR-004**: The system MUST provide a multi-step host creation form with six configuration sections: Basic Configuration, Instance Configuration, Operating System, IP Configuration, Purchase Duration, and Cost Confirmation.
+- **FR-005**: The system MUST validate hostname format (alphanumeric and underscore, 4–10 characters, not starting with underscore) with real-time error feedback.
+- **FR-006**: The system MUST validate access credentials: username (alphanumeric and special characters, 4–16 characters) and password (alphanumeric and special characters, 8–32 characters) with real-time error feedback.
+- **FR-007**: The system MUST offer two instance types (Economy and High-Performance) with multiple specific spec options, each displaying vCPU, RAM, system disk, and monthly price.
+- **FR-008**: The system MUST provide an OS image selector with "Huawei Euler OS", "Ubuntu", and "Windows" options, defaulting to "Huawei Euler OS".
+- **FR-009**: The system MUST support two IP allocation modes: DHCP (no additional input) and Manual Configuration (requiring valid IP address and subnet mask 8–24).
+- **FR-010**: The system MUST calculate and display estimated costs in real-time: for subscription billing (instance price × months, displayed per month), and for on-demand billing (instance price ÷ 30, displayed per day).
+- **FR-011**: The system MUST display a confirmation dialog summarizing all user selections including total cost before submitting the creation request.
+- **FR-012**: The system MUST enforce a maximum quota of 100 hosts per user (counting all records where deleted_at is null, including normal, stopping, stopped, failed, and deleting states).
+- **FR-013**: The system MUST perform asynchronous lifecycle operations (create, shutdown, start, delete) with intermediate transitional states before reaching terminal states.
+- **FR-014**: The system MUST filter soft-deleted hosts from the list view while retaining their records in the database.
+- **FR-015**: The system MUST automatically refresh host status at short intervals when any host is in a transitional state (creating, shutting down, starting, deleting), and stop refreshing when all hosts reach terminal states.
+- **FR-016**: The system MUST log all host lifecycle operations (create, delete, start, shutdown) including operator, timestamp, IP address, and operation details.
+- **FR-017**: The system MUST require authentication for all LECS host operations, with admin users managing all hosts and regular users managing only their own hosts.
+- **FR-018**: The system MUST encrypt sensitive data (IP configuration, password hashes) in storage and apply data masking to logs.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities
 
-- **LECS Host**: A cloud server instance created and managed by a user. Key attributes: unique ID, name, status, region, billing mode, instance spec, OS image, public/private IP addresses, security settings, auto-renewal flag, quantity, creation/expiry timestamps.
-- **Instance Spec**: A computing configuration template defining vCPU count, memory size, system disk type and capacity, and monthly price. Belongs to an instance type (Economy / High Cost-Performance / High Performance).
-- **OS Image**: An operating system template used when creating a host. Key attributes: image name, OS family, version, architecture, default disk size.
-- **User**: The account owner who creates and manages LECS Hosts. Has a quota limit for maximum number of hosts.
+- **LECS Host**: A virtual computing instance that represents a cloud server. Key attributes include: unique identifier, owner/user, hostname, billing mode (subscription or on-demand), runtime status (creating, normal, failed, shutting down, stopped, starting, deleting, deleted), instance specification (vCPU, RAM, system disk), operating system image, IP configuration, purchase duration, cost snapshot, soft-deletion timestamp, and error message (for failed operations).
+- **Instance Spec**: A configurable hardware specification defining the computing resources allocated to a host. Includes instance type (Economy or High-Performance), vCPU count, RAM size, system disk size, and monthly price.
+- **User Quota**: A per-user limit on the total number of hosts (up to 100) that determines whether new host creation is permitted. Counts all non-deleted host records.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: Users can find "LECS Host" via the console search bar and navigate to the list page within 1 second of entering search text
-- **SC-002**: The LECS Host List page loads fully (including statistics and empty state or data table) within 2 seconds
-- **SC-003**: Users can complete the LECS Host creation workflow and successfully submit a creation request within 30 seconds
-- **SC-004**: 100% of interactive components on the LECS Host pages have a `data-testid` attribute assigned
-- **SC-005**: The visual style (color scheme, typography, spacing, interaction patterns) of the LECS Host pages is consistent with the existing Console Dashboard pages
-- **SC-006**: API response times for list query, create, and delete operations are under 500ms at P95 percentile
-- **SC-007**: Quota validation (max 200 hosts) and single-request validation (max 100 hosts) correctly block submission when limits would be exceeded
+- **SC-001**: Users can find "LECS Hosts" in the console search results and navigate to the list page within 1 second of typing.
+- **SC-002**: The LECS hosts list page loads completely (including status data and action columns) within 2 seconds.
+- **SC-003**: List page state transitions operate with 100% accuracy—no stuck states or state desynchronization between front-end and database.
+- **SC-004**: Action button enable/disable logic matches the state machine matrix with 100% accuracy—zero accidental triggers of invalid operations.
+- **SC-005**: The delete operation rejects requests for hosts in non-stopped/non-failed states with 100% interception rate.
+- **SC-006**: 100% of interactive components have `data-testid` attributes for automated testing coverage.
 
 ## Assumptions
 
-- Users have stable internet connectivity for normal access to the Lee Cloud platform
-- v1.0 does NOT include start/stop/restart/reset password operations for LECS Hosts — these will be provided in subsequent versions
-- The existing user authentication system (JWT Cookie) is reused without adding new auth logic
-- Instance spec data (Economy, High Cost-Performance, High Performance types) and OS image data are provided by the backend; the frontend only renders and allows selection
-- Region selection is initially fixed to "华北-北京四", with multi-region support planned for a future version
-- Public IP allocation and bandwidth management are handled automatically by the underlying infrastructure
-- Pricing logic is computed by the backend and returned; the frontend only displays the calculated fees
-- Host creation is an asynchronous operation; the frontend notifies the user of completion after the backend finishes creating the instance
+- Target users are cloud platform customers with basic technical knowledge to configure virtual servers (IP, OS, instance specs).
+- Desktop-only support (1280px and above); tablet and mobile support are out of scope for v1.0.
+- Existing authentication system and user session management will be reused (JWT cookie authentication).
+- Existing CSRF protection and API rate limiting mechanisms will be applied to LECS host APIs.
+- Cost display on the front-end is for user reference only; actual billing is determined by the back-end order generation.
+- Compute resource billing stops when a host is stopped in on-demand mode, but storage billing continues (disk and image retention fees apply).
+- Password policy does not require mixed case letters—alphanumeric and special characters with 8–32 length is sufficient.
+- The async task queue infrastructure (e.g., Celery/RQ) exists and supports scheduling tasks with 30s create, 10s shutdown/start, and 5s delete durations.
+- Instance spec data and OS image data sources are internally available and provide accurate pricing information.
+- "Restart" operation (shutdown + start combination) is out of scope for v1.0.

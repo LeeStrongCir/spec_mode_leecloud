@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, Form, Request, Response
 from fastapi.responses import RedirectResponse
+from starlette.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,54 +63,92 @@ def _clear_auth_cookies(response: Response):
 )
 async def login(
     request: Request,
-    req: LoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
+    identifier: Annotated[str | None, Form()] = None,
+    password: Annotated[str | None, Form()] = None,
+    remember_me: Annotated[bool, Form()] = False,
 ):
-    info = await extract_login_info(request)
-    try:
-        user = await authenticate_user(req.identifier, req.password, db)
-    except ValueError as e:
-        error_code = str(e)
-        await create_login_record(
-            db=db,
-            user_id=None,
-            status="failed",
-            failure_reason=error_code,
-            ip_address=info["ip_address"],
-            user_agent=info["user_agent"],
-        )
-        if error_code == "ACCOUNT_LOCKED":
-            return ErrorResponse(
-                status="error",
-                error_code="ACCOUNT_LOCKED",
-                message="账号已锁定，请稍后再试",
-                unlock_at=None,
+    is_form = identifier is not None or password is not None
+    tmpl = Jinja2Templates(directory="frontend/templates")
+
+    if is_form:
+        if not identifier or not password:
+            return tmpl.TemplateResponse(
+                request, "login.html",
+                context={"error": "请输入用户名和密码", "identifier": identifier or ""},
+                status_code=422,
             )
-        return ErrorResponse(
-            status="error",
-            error_code="INVALID_CREDENTIALS",
-            message="用户名或密码错误",
+
+        info = await extract_login_info(request)
+        try:
+            user = await authenticate_user(identifier, password, db)
+        except ValueError as e:
+            code = str(e)
+            msg = "账号已锁定，请稍后再试" if code == "ACCOUNT_LOCKED" else "用户名或密码错误"
+            await create_login_record(
+                db=db, user_id=None, status="failed", failure_reason=code,
+                ip_address=info["ip_address"], user_agent=info["user_agent"],
+            )
+            return tmpl.TemplateResponse(
+                request, "login.html", context={"error": msg, "identifier": identifier}, status_code=401,
+            )
+
+        await create_login_record(
+            db=db, user_id=user.id, status="success",
+            ip_address=info["ip_address"], user_agent=info["user_agent"],
         )
+        user.last_login_at = datetime.now(timezone.utc)
+        user.failed_login_count = 0
+        await db.commit()
+
+        access_token, refresh_token = await create_session(user, db, remember_me)
+        redirect_resp = RedirectResponse(url="/console", status_code=302)
+        # Set cookies directly on the redirect response (not on `response: Response`)
+        redirect_resp.set_cookie("access_token", access_token, httponly=True, secure=False, samesite="lax", path="/", max_age=MAX_AGE_ACCESS)
+        refresh_max = 30 * 86400 if remember_me else settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400
+        redirect_resp.set_cookie("refresh_token", refresh_token, httponly=True, secure=False, samesite="lax", path="/api/auth/refresh", max_age=refresh_max)
+        return redirect_resp
+
+    # JSON-based login (existing API)
+    from pydantic import BaseModel
+
+    class BodyData(BaseModel):
+        identifier: str
+        password: str
+        remember_me: bool = False
+
+    try:
+        body = BodyData.model_validate(request.json())
+    except Exception:
+        return ErrorResponse(status="error", message="请求体格式错误")
+
+    req_info = await extract_login_info(request)
+    try:
+        jwt_user = await authenticate_user(body.identifier, body.password, db)
+    except ValueError as e:
+        code = str(e)
+        await create_login_record(
+            db=db, user_id=None, status="failed", failure_reason=code,
+            ip_address=req_info["ip_address"], user_agent=req_info["user_agent"],
+        )
+        if code == "ACCOUNT_LOCKED":
+            return ErrorResponse(status="error", error_code="ACCOUNT_LOCKED", message="账号已锁定，请稍后再试")
+        return ErrorResponse(status="error", error_code="INVALID_CREDENTIALS", message="用户名或密码错误")
 
     await create_login_record(
-        db=db,
-        user_id=user.id,
-        status="success",
-        ip_address=info["ip_address"],
-        user_agent=info["user_agent"],
+        db=db, user_id=jwt_user.id, status="success",
+        ip_address=req_info["ip_address"], user_agent=req_info["user_agent"],
     )
-
-    user.last_login_at = datetime.now(timezone.utc)
-    user.failed_login_count = 0
+    jwt_user.last_login_at = datetime.now(timezone.utc)
+    jwt_user.failed_login_count = 0
     await db.commit()
 
-    access_token, refresh_token = await create_session(user, db, req.remember_me)
-    _set_auth_cookies(response, access_token, refresh_token, req.remember_me)
-
+    at, rt = await create_session(jwt_user, db, body.remember_me)
+    _set_auth_cookies(response, at, rt, body.remember_me)
     return LoginResponse(
         message="登录成功",
-        user={"id": str(user.id), "username": user.username, "email": user.email},
+        user={"id": str(jwt_user.id), "username": jwt_user.username, "email": jwt_user.email},
     )
 
 

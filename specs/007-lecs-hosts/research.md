@@ -1,87 +1,146 @@
-# Research: LECS Host Management
+# Research: LECS Hosts Management
 
-## Technical Decisions
+**Date**: 2026-05-09
+**Feature**: 007-lecs-hosts
 
-### Decision 1: LECS Host Model Design
-**Decision**: LECSHost is a new SQLAlchemy model stored in the `lecs_hosts` table, with a `user_id` foreign key to the existing `User` model. Status is stored as `SAEnum` with values `creating`, `running`, `stopped`, `error`, `deleted`. Soft-delete via `deleted_at` column. Billing mode stored as enum (`monthly`/`hourly`).
+## R-001: Async Task Execution Approach
 
-**Rationale**: Follows the existing model pattern (User, LoginRecord, Session). Uses `SAEnum` for type safety. Soft-delete aligns with the "Recycle Bin" tab in the UI design. `user_id` scoping enables multi-tenant isolation.
+**Context**: The spec requires async lifecycle operations (create ~30s, shutdown/start ~10s, delete ~5s). The project has no task queue infrastructure (no Celery/RQ configured).
 
-**Alternatives considered**:
-- Hard delete → Rejected: UI shows a "Recycle Bin" tab, implies soft deletion
-- Direct instance_type embedding → Rejected: Separating InstanceSpec into its own table allows future spec updates without migration
+**Decision**: Use `asyncio.create_task()` with in-memory state tracking managed by a service layer. Each async operation will:
+1. Write the transitional state to DB immediately (e.g., `creating`, `shutting_down`)
+2. Spawn a background task with explicit `await asyncio.sleep()` to simulate processing time
+3. Update DB to final state upon completion (or timeout fallback)
 
-### Decision 2: Instance Types & OS Images Storage
-**Decision**: Instance types and OS images are static configuration tables seeded at startup, not user-editable entities. Two models: `InstanceType` (economy/high-cost-performance/high-performance) and `InstanceSpec` (concrete vCPU/memory/disk/price configuration). OS images stored in `OSImage` model.
-
-**Rationale**: Cloud providers don't expose instance type definitions as mutable end-user resources. Seeding at startup (via `lifespan` like the admin user seed) ensures they're always available. Keeps the API surface small.
-
-**Alternatives considered**:
-- Config file (YAML/JSON) → Rejected: Database allows future admin management via a management API
-- Remote API to "real" cloud provider → Deferred: v1.0 is mock/static; real provider integration is future scope
-
-### Decision 3: API Response Format
-**Decision**: LECS Host API endpoints return a consistent wrapper format:
-- List: `{"status": "success", "data": {...}, "pagination": {"total": N, "page": P, "page_size": S, "pages": P}}`
-- Create: `{"status": "success", "data": {"host_id": "...", "name": "...", "status": "creating"}}`
-- Delete: `{"status": "success", "data": {"host_id": "..."}}`
-
-**Rationale**: Matches the existing pattern used by `login_record.py` API endpoints. Consistent with `fastapi.Response` best practices. Pagination uses `math.ceil()` for total pages calculation (existing pattern).
+**Rationale**: 
+- The project has no message queue dependency; introducing one would be premature.
+- `asyncio.create_task()` is lightweight, already available in the FastAPI async runtime.
+- The existing `user_agent_service.py` pattern in the project shows async service methods are already in use.
+- Tasks are tracked via a simple `Dict[uuid, asyncio.Task]` registry keyed by host ID, allowing cancellation and status querying.
+- For production scale beyond v1.0, the abstraction layer allows swapping to Celery without changing API contracts.
 
 **Alternatives considered**:
-- Pydantic `GenericResponse` wrapper → Rejected: The existing codebase uses plain dicts (no response wrapper model), so we follow the established pattern
+- **Celery/RQ integration**: Would require Redis/RabbitMQ, worker processes, and significant infrastructure setup. Overkill for v1.0.
+- **Simple polling simulation**: Client-side only with no server-side state writes. Would fail to persist state across server restarts and would break if the user refreshes.
+- **Database-level job queue with periodic scheduler**: More robust but requires additional infrastructure (APScheduler, crontab entry, or similar).
 
-### Decision 4: Region Handling
-**Decision**: v1.0 hardcodes region to "华北-北京四" (North China-Beijing-4). The region selector UI element is displayed but is functionally a no-op. Backend APIs filter by this fixed region value.
+**Risk mitigation**: Background tasks register with a cleanup routine. Server restart causes all `creating`/`shutting_down`/`starting`/`deleting` hosts to be reset to their appropriate fallback states via the lifespan startup handler.
 
-**Rationale**: The spec's Assumptions section states "Region selection is initially fixed to 华北-北京四, with multi-region support planned for a future version." This minimizes complexity while preserving the UI layout for future expansion.
+---
 
-**Alternatives considered**:
-- Full multi-region support → Deferred: Requires infrastructure provider abstraction and regional resource routing
-- Region from user profile → Rejected: No user profile system exists yet
+## R-002: State Machine Implementation
 
-### Decision 5: LECS Host Creation is Synchronous for v1.0
-**Decision**: The `create_host()` service function creates the LECSHost row synchronously with status `creating` and returns immediately. The frontend shows a success notification and navigates back to the list page. The status transition to `running` would be handled by a background worker (future scope).
+**Context**: 8 states need specific transition rules enforced at both API (409/403 responses) and frontend (button disabled) levels.
 
-**Rationale**: Cloud server provisioning is inherently async. A synchronous API that returns `creating` status provides immediate feedback without requiring a polling mechanism or WebSocket infrastructure (which don't exist in the current codebase). The list page will display hosts with `creating` status.
+**Decision**: Define a static state transition matrix as a Python dict mapping each state to allowed operations. The API service layer checks this matrix before executing any lifecycle operation. Frontend logic mirrors the same matrix in JavaScript for immediate button state.
 
-**Alternatives considered**:
-- Background Celery/RQ worker → Deferred: Requires message broker infrastructure not present
-- Polling endpoint → Deferred: Adds endpoint complexity for v1.0
+**State Machine Matrix**:
 
-### Decision 6: Pricing Calculation
-**Decision**: Pricing is computed by the backend service using a deterministic formula: `(instance_spec.monthly_price × duration_multiplier) × quantity × quantity_discount`. The frontend fetches the total from the backend during creation submission.
+| Current State | Allowed Operations | Next State(s) |
+|--------------|-------------------|---------------|
+| `creating` | None (lock) | `normal` (success) / `failed` (timeout/error) |
+| `normal` | `shutdown` | `shutting_down` |
+| `normal` | `delete` — **blocked** (front-end disabled) | — |
+| `failed` | `start` | `starting` |
+| `failed` | `delete` | `deleting` |
+| `shutting_down` | None (lock) | `stopped` |
+| `stopped` | `start` | `starting` |
+| `stopped` | `delete` | `deleting` |
+| `starting` | None (lock) | `normal` |
+| `deleting` | None (lock) | `deleted` (soft delete) |
+| `deleted` | None (hidden from list) | — |
 
-**Rationale**: Pricing must be authoritative (cannot be set by the frontend). The service computes it at creation time and stores it as `price_amount` on the host record for audit purposes.
+**API Enforcement**: Each lifecycle endpoint checks the current state against allowed states. If mismatch, returns `HTTPException(status_code=409)` with a descriptive error message. The frontend never sends disallowed requests (buttons are disabled), but the API must defend regardless.
 
-**Alternatives considered**:
-- Frontend calculates → Rejected: Security risk (price manipulation); backend must be authoritative
-- External pricing service → Deferred: v1.0 static pricing; external service is future scope
+**Frontend Enforcement**: A JavaScript state machine object maps each status value to `canShutdown`, `canStart`, `canDelete` booleans. The render function applies the `disabled` attribute accordingly.
 
-### Decision 7: Console Search Integration
-**Decision**: The LECS Host menu item is added to the existing console template's search results data structure (likely inline JavaScript or template variable). The search functionality itself is not being rebuilt — only the "LECS Host" option is added to the existing search results set.
-
-**Rationale**: The existing console page already implements search functionality. Adding "LECS Host" as a new search result entry is the minimal change. The existing search JS handles keyword matching and click navigation.
-
-**Alternatives considered**:
-- New search index/API → Rejected: Over-engineering for a single menu item addition
-- Separate search page → Rejected: The console search bar already exists
-
-### Decision 8: Jinja2 Template Structure for Creation Page
-**Decision**: The creation page uses a single long-scroll Jinja2 template with 6 visual sections separated by headings and cards. Form data is submitted via a single POST to the creation API. Each section uses standard HTML form elements with `name` attributes for binding.
-
-**Rationale**: The design screenshots show a single-page long form. A single POST submission is the simplest and most reliable approach for SSR. Section-by-section client-side validation would require a JS framework (not in scope for v1.0).
+**Rationale**: A declarative matrix is easier to maintain, test, and reason about than scattered if/else guards. Both Python and JS implementations share the same logical structure.
 
 **Alternatives considered**:
-- Multi-step wizard with client-side state → Rejected: Requires client-side framework (out of scope)
-- Section-by-section API calls → Rejected: Would require session state management on the backend
+- **Transition function per state**: Each state is a class with a `next_state(operation)` method. More extensible but over-engineered for 8 states.
+- **Database-level constraints**: A CHECK constraint limiting transitions. Would provide ultimate safety but requires raw SQL enums and is harder to modify.
 
-## Resolved NEEDS CLARIFICATION Items
+---
 
-### From Source Requirements (Section 9):
+## R-003: Console Search Integration
 
-1. **LECS Host Lifecycle Management** → Resolved as: v1.0 only supports creation and deletion. List page action buttons (Start, Stop, Restart, Reset Password) are present but non-functional (disabled or hidden). This follows the "不包含" (excludes) section of the requirements document.
+**Context**: `console.html` has a vanilla JS `serviceCatalog` array with categorized service items. Need to add "LECS主机" as a searchable entry that routes to `/console/lecs-hosts/list`.
 
-2. **Public IP Binding** → Resolved as: Public IP is created and bound at host creation time. The public IP address is assigned during the `create_host()` service call. This aligns with industry-standard cloud provider patterns.
+**Decision**: Add a new entry in the `serviceCatalog` array under the "控制台" category:
 
-3. **Creation Flow Interaction Mode** → Resolved as: Single-page long form (Option A), matching the provided design screenshots. Six configuration sections are rendered in a scrollable page with the purchase button at the bottom.
+```javascript
+{ name: 'LECS主机', action: '计算', type: 'ecs', url: '/console/lecs-hosts/list' }
+```
+
+Modify the `renderResults` function's click handler to respect the `url` field and navigate. The existing code already has a pattern for this with the `item.url` check in the click handler:
+
+```javascript
+const clickHandler = item.url ? ` onclick="window.location.href='${item.url}'"` : '';
+```
+
+This pattern exists but is not triggered because no items currently have `url` properties. Adding `url: '/console/lecs-hosts/list'` to the LECS host catalog entry will activate this existing routing pattern.
+
+**Rationale**: Minimal change to existing code. The routing infrastructure is already present, just needs data population. Maintains consistency with the existing search implementation.
+
+---
+
+## R-004: Form Validation Approach
+
+**Context**: The creation page has complex validation (hostname regex, credential complexity, IP format, mask range). Needs real-time feedback.
+
+**Decision**: Client-side JavaScript validation with visual feedback. On "立即购买" click, all validations run client-side first. On submit, the server performs the same validations (defense in depth). Form validation errors display as red text below the respective input fields.
+
+**Validation rules implemented in two places**:
+1. **Client-side** (`lecs-hosts.js`): Regex-based immediate validation on `input`/`change` events. Shows/hides error messages with CSS class toggling.
+2. **Server-side** (API route): Pydantic schema validation + custom validator functions. Returns `422 Unprocessable Entity` with field-level error messages that the client renders.
+
+**Rationale**:
+- Client-side provides instant user feedback without round-trip latency.
+- Server-side ensures data integrity (client validation can be bypassed).
+- The project's existing `schemas/auth.py` pattern uses Pydantic models for body validation, which extends naturally to LECS host create schemas.
+- No htmx needed — the entire creation flow is a form submission → API call → redirect pattern, simpler and more consistent with the existing login/form flow.
+
+**Alternatives considered**:
+- **htmx with server-side validation**: Would add a new dependency (htmx) and require server round-trips for each field validation. Overkill for v1.0.
+- **HTMX + Alpine.js**: Would modernize the SSR approach but adds two new JavaScript dependencies.
+
+---
+
+## R-005: Cost Calculation Strategy
+
+**Context**: Spec requires real-time cost display. Frontend calculates estimated cost in the confirmation dialog. Backend is the source of truth for actual billing.
+
+**Decision**: Frontend calculates cost on-demand from the selected instance spec price and billing mode/duration. The formula is straightforward arithmetic (price × months for subscription, price ÷ 30 for on-demand). Instance spec prices are hardcoded in the frontend (matching the spec's defined prices) and also stored in the backend for consistency validation.
+
+**Frontend**: Pure JS calculation triggered on any spec/billing-mode/duration change. Updates the cost display area instantly.
+
+**Backend**: The create API endpoint receives `billing_mode` + `spec_id` + `duration` and recalculates cost for the final order. Stores `cost_info` as a JSON snapshot in the DB for audit trails.
+
+**Rationale**: Simple arithmetic has zero risk of front-end calculation error. Hardcoding prices on the front-end is acceptable because the spec defines fixed prices. For future dynamic pricing, a backend `GET /api/v1/lecs-hosts/pricing` endpoint can be added.
+
+---
+
+## R-006: List Page Polling Strategy
+
+**Context**: Frontend must poll for status updates when hosts are in transitional states.
+
+**Decision**: Use `setInterval` at 3-second intervals, but only active when `creating`, `shutting_down`, `starting`, or `deleting` hosts exist in the current page state. The polling function:
+1. Calls `GET /api/v1/lecs-hosts` (same list endpoint)
+2. Compares returned statuses with current DOM state
+3. Updates affected rows (status badge, button states)
+4. Clears interval when no transitional states remain
+
+**Rationale**: Simple and matches existing patterns. No event-source or WebSocket needed for ~3-second polling granularity. The polling cost is negligible given the short-lived nature of transitional states.
+
+---
+
+## Consolidated Decisions
+
+| # | Decision | Chosen Approach |
+|---|---------|----------------|
+| R-001 | Async execution | `asyncio.create_task()` with in-memory registry |
+| R-002 | State machine | Declarative dict matrix (Python + JS mirror) |
+| R-003 | Console search | Add `url` field to existing `serviceCatalog` |
+| R-004 | Form validation | Client-side JS + server-side Pydantic (dual) |
+| R-005 | Cost calculation | Frontend arithmetic for display; backend for actual |
+| R-006 | List polling | `setInterval` 3s when transitional states exist |

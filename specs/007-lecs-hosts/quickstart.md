@@ -1,112 +1,112 @@
-# Quick Start: LECS Host Management (007-lecs-hosts)
+# Quickstart: LECS Hosts Management
 
-## Local Development
+**Date**: 2026-05-09
+**Feature**: 007-lecs-hosts
 
-### Prerequisites
+## Prerequisites
 
 - Python 3.11+
-- uv (package manager)
-- Git
+- Working virtual environment (see `backend/README.md`)
+- Database migrations up to date
 
-### Setup
+## Setup
+
+### 1. Navigate to backend directory
 
 ```bash
-# From project root
 cd backend
-
-# Install dependencies (includes new LECS Host model/deps — no new packages needed)
-cd /mnt/d/project_workspace/spec_mode_leecloud/backend && uv sync
-
-# Set up environment variables
-cp .env.example .env  # If .env.example exists, otherwise create .env manually
-# Ensure DATABASE_URL uses aiosqlite for local dev
-# e.g., DATABASE_URL="sqlite+aiosqlite:///./dev.db"
-
-# Run database migrations
-cd /mnt/d/project_workspace/spec_mode_leecloud/backend && alembic upgrade head
 ```
 
-### Run Server
+### 2. Install dependencies (if not already)
 
 ```bash
-cd /mnt/d/project_workspace/spec_mode_leecloud/backend
-uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
+uv sync --extra dev
 ```
 
-Server starts at `http://localhost:8000`.
-
-- Console: `http://localhost:8000/console` (requires login)
-- LECS Host List: `http://localhost:8000/console/lecs-hosts/list`
-- LECS Host Create: `http://localhost:8000/console/lecs-hosts/create`
-- API: `http://localhost:8000/api/v1/lecs-hosts`
-
-### Running Tests
+### 3. Run database migration
 
 ```bash
-cd /mnt/d/project_workspace/spec_mode_leecloud/backend
-
-# Unit tests only
-pytest tests/unit/test_lecs_host_service.py -v
-
-# Integration tests only
-pytest tests/integration/test_lecs_host_api.py -v
-
-# All LECS tests
-pytest tests/ -k lecs_host -v
-
-# Full test suite with coverage
-pytest --cov=src/app --cov-fail-under=90
+uv run alembic upgrade head
 ```
 
-### Code Style
+This creates the `lecs_hosts` table with all columns defined in the migration.
+
+### 4. Start the server
 
 ```bash
-cd /mnt/d/project_workspace/spec_mode_leecloud/backend
-ruff check src/app tests  # Linting
-ruff format src/app tests  # Formatting
+uv run uvicorn src.app.main:app --reload --port 8000
 ```
 
-## Key Files Modified/Added
+### 5. Access the pages
 
-| File | Status | Purpose |
-|------|--------|---------|
-| `backend/src/app/models/lecs_host.py` | NEW | LECSHost model + enums |
-| `backend/src/app/models/instance_type.py` | NEW | InstanceType + InstanceSpec + OSImage models |
-| `backend/src/app/schemas/lecs_host.py` | NEW | Pydantic request/response schemas |
-| `backend/src/app/services/lecs_host_service.py` | NEW | Business logic service |
-| `backend/src/app/api/lecs_host.py` | NEW | REST API endpoints |
-| `backend/src/app/main.py` | MODIFIED | Register lecs_host router + SSR page routes |
-| `backend/frontend/templates/lecs_host_list.html` | NEW | List page template |
-| `backend/frontend/templates/lecs_host_create.html` | NEW | Creation page template |
-| `backend/frontend/static/css/console.css` | MODIFIED | LECS Host specific styles |
-| `backend/tests/unit/test_lecs_host_service.py` | NEW | Unit tests |
-| `backend/tests/integration/test_lecs_host_api.py` | NEW | Integration tests |
-| `backend/tests/e2e/test_lecs_host_list.py` | NEW | Playwright E2E tests |
-| `backend/alembic/versions/` | NEW | Migration: add lecs_hosts, instance_types, instance_specs, os_images tables |
+- **API documentation**: http://localhost:8000/docs
+- **Console** (search for "LECS主机"): http://localhost:8000/console-full
+- **LECS Host list page**: http://localhost:8000/console/lecs-hosts/list
+- **LECS Host create page**: http://localhost:8000/console/lecs-hosts/create
 
-## Default Credentials (Dev)
-
-The admin account is seeded at startup via the existing `lifespan` function:
-
-- Username: `admin`
-- Password: `admin@123`
-
-Login at `http://localhost:8000/login`, then navigate to Console → search "LECS主机" → LECS Host List.
-
-## API Quick Test
+### 6. Verify via API
 
 ```bash
-# Login first
-curl -X POST http://localhost:8000/api/auth/login \
-  -d "username=admin" -d "password=admin@123" \
-  -c cookies.txt -v
+# List hosts (requires valid access_token cookie)
+curl -b "access_token=<your_token>" http://localhost:8000/api/v1/lecs-hosts
 
-# List hosts (empty initially)
-curl -b cookies.txt http://localhost:8000/api/v1/lecs-hosts
+# Create a host
+curl -X POST -b "access_token=<your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hostname": "test-host-01",
+    "billing_mode": "subscription",
+    "instance_type": "economy",
+    "spec_id": "eco-2c4g",
+    "os_image": "huawei_euler",
+    "ip_mode": "dhcp",
+    "ip_address": null,
+    "ip_mask": null,
+    "username": "root_admin",
+    "password": "MyStr0ng!Pass",
+    "duration": 1
+  }' \
+  http://localhost:8000/api/v1/lecs-hosts
 
-# Get instance types
-curl -b cookies.txt http://localhost:8000/api/v1/instance-types
+# Get pricing info
+curl -b "access_token=<your_token>" http://localhost:8000/api/v1/lecs-hosts/pricing
 
-# Get OS images
-curl -b cookies.txt http://localhost:8000/api/v1/os-images
+# Shutdown a host
+curl -X POST -b "access_token=<your_token>" \
+  http://localhost:8000/api/v1/lecs-hosts/<host_id>/shutdown
+
+# Start a host
+curl -X POST -b "access_token=<your_token>" \
+  http://localhost:8000/api/v1/lecs-hosts/<host_id>/start
+
+# Delete a host (must be stopped or failed)
+curl -X DELETE -b "access_token=<your_token>" \
+  http://localhost:8000/api/v1/lecs-hosts/<host_id>
 ```
+
+## Run Tests
+
+```bash
+# Unit + integration tests
+cd backend
+.venv/bin/python -m pytest tests/test_lecs_host* -v --cov=src/app --cov-report=html
+```
+
+## Verification Checklist
+
+After setup, verify the following:
+
+- [ ] User can search "LECS" in console search bar and see "LECS主机" result
+- [ ] Clicking search result navigates to `/console/lecs-hosts/list`
+- [ ] List page loads (shows empty table for new users)
+- [ ] Clicking "创建ECS主机" navigates to creation page
+- [ ] Creation form validates hostname, username, password, IP input
+- [ ] Selecting a spec updates the cost display in real time
+- [ ] Clicking "立即购买" shows confirmation dialog with full summary
+- [ ] After submission, new host appears with "创建中" status
+- [ ] After ~30s, host status changes to "正常"
+- [ ] Shutdown button works on "正常" state host (status: 关机中 → 已关机)
+- [ ] Start button works on "已关机" state host (status: 启动中 → 正常)
+- [ ] Delete button is disabled for "正常" state; enabled for "已关机"
+- [ ] Soft-deleted hosts disappear from the list
+- [ ] All interactive components have `data-testid` attributes

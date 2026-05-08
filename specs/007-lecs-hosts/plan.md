@@ -1,40 +1,37 @@
-# Implementation Plan: LECS Host Management
+# Implementation Plan: LECS Hosts Management
 
-**Branch**: `007-lecs-hosts` | **Date**: 2026-05-08 | **Spec**: [spec.md](./spec.md)
+**Branch**: `007-lecs-hosts` | **Date**: 2026-05-09 | **Spec**: [spec.md](./spec.md)
 **Input**: Feature specification from `specs/007-lecs-hosts/spec.md`
-
-**Note**: This template is filled in by the `/speckit.plan` command. See `.specify/templates/plan-template.md` for the execution workflow.
 
 ## Summary
 
-Implement LECS Host (cloud server) management for the Lee Cloud Console. Users can discover the feature via console search, view a list of their hosts with status statistics, and create new hosts through a multi-section configuration page (billing mode, instance spec, OS image, public network access, purchase quantity). Backend provides REST APIs for listing, creating, and deleting LECS Host instances. Frontend uses Jinja2 SSR templates styled with the existing console.css, with all interactive components annotated with `data-testid` attributes per the project constitution.
+Build LECS (Lee Elastic Cloud Server) host management for the Lee Cloud Platform: a searchable entry point from the console, a list page with state-machine-driven action buttons (shutdown/start/delete), and a multi-step creation page with form validation and cost calculation. Follows existing SSR + Jinja2 template patterns, SQLAlchemy async ORM models, and JWT cookie auth already in use.
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+  
-**Primary Dependencies**: FastAPI 0.115+, SQLAlchemy 2.0 (async), PyJWT 2.9+, argon2-cffi 23.1+, Jinja2, Pydantic 2.5+, pydantic-settings 2.5+, Alembic, aiosqlite (dev), asyncpg (prod)  
-**Storage**: SQLite (`dev.db`) for development → PostgreSQL for production. Alembic for migrations.  
-**Testing**: pytest + pytest-asyncio + pytest-cov (90% minimum coverage) + Playwright E2E  
-**Target Platform**: Linux server (FastAPI ASGI) serving SSR HTML via Jinja2 + static CSS  
-**Project Type**: SSR web application (Jinja2 templates + FastAPI backend, no SPA framework)  
-**Performance Goals**: API responses < 500ms at P95, list page load < 2 seconds, search-to-navigate < 1 second  
-**Constraints**: Jinja2 SSR only (no client-side JavaScript framework), custom CSS only (no external CSS libraries), all interactive components must include `data-testid`, JWT Cookie auth only, region initially fixed to "华北-北京四"  
-**Scale/Scope**: Single-user quota of 200 hosts max, 100 per single creation request; bandwidth 1-2000 Mbps
+**Language/Version**: Python 3.11  
+**Primary Dependencies**: FastAPI 0.115+, SQLAlchemy 2.0 (async), Pydantic 2.5+, Alembic, Jinja2 (SSR templates), httpx (testing), Playwright (E2E)  
+**Storage**: SQLite (dev) → PostgreSQL (prod); same as existing project  
+**Testing**: pytest, pytest-asyncio, pytest-cov, Playwright  
+**Target Platform**: Linux server (FastAPI + uvicorn)  
+**Project Type**: Web application (backend API + SSR frontend)  
+**Performance Goals**: List page loads < 2s; API responses < 200ms p95; supports 100 hosts per user  
+**Constraints**: Desktop-only (1280px+); async lifecycle operations (create ~30s, shutdown/start ~10s, delete ~5s); max 100 hosts/user quota  
+**Scale/Scope**: 2 new pages (list + create), 5 API endpoints, 1 new DB model, console search integration
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-The project constitution (`.specify/memory/constitution.md`) mandates:
+From project constitution (`constitution.md`):
 
-1. **data-testid mandatory gate**: All interactive components (buttons, inputs, selects, checkboxes, radio groups) in the LECS Host List page and Creation page MUST have `data-testid` attributes. The spec's SC-004 explicitly requires 100% coverage. → **PASS** — SC-004 and FR-020 explicitly enforce this.
-2. **Selection priority gate**: `data-testid` > `aria-label` > `role`+`name` > other selectors. → **PASS** — All selectors will use `data-testid` (FR-020).
-3. **Semantic naming gate**: `[功能模块]-[元素类型]` format, lowercase hyphen-separated. → **PASS** — The spec includes a detailed `data-testid` naming table (Section 3.2) with 40+ defined attributes.
-4. **Validation states gate**: Form components must include validation state identifiers. → **PASS** — Creation page has form validation (quota, bandwidth, billing mode rules) with error state display (FR-021, FR-022, FR-023).
-5. **Loading/Error states gate**: Async components must include loading and result state identifiers. → **PASS** — Both list and create pages have explicit loading/success/failed/empty state requirements (Section 3.3 of spec).
-6. **Quality gate**: 100% data-testid coverage for interactive components. → **PASS** — Enforced by SC-004 and the PR code review requirements in the constitution's workflow section.
+1. ✅ **All interactive components MUST have `data-testid`** — Plan includes `data-testid` on every button, input, select, radio, and dialog element in both SSR pages. Naming follows `[feature]-[element]` format.
+2. ✅ **Form components MUST include validation state indicators** — Creation page forms will show real-time validation errors with styled feedback.
+3. ✅ **Async operation components MUST include loading and result state indicators** — List page will show transitional statuses (creating, shutting_down, starting, deleting) with visual indicators and polling behavior.
+4. ✅ **All `data-testid` MUST be declared in documentation** — Test IDs are documented in the spec and will be reflected in the implementation.
+5. ✅ **100% `data-testid` coverage quality gate** — All interactive elements in new pages will be tagged.
 
-**Result**: All gates PASS. No violations to justify.
+**Gate Status**: PASS — No violations.
 
 ## Project Structure
 
@@ -42,12 +39,12 @@ The project constitution (`.specify/memory/constitution.md`) mandates:
 
 ```text
 specs/007-lecs-hosts/
-├── plan.md              # This file (/speckit.plan command output)
-├── research.md          # Phase 0 output (/speckit.plan command)
-├── data-model.md        # Phase 1 output (/speckit.plan command)
-├── quickstart.md        # Phase 1 output (/speckit.plan command)
-├── contracts/           # Phase 1 output (/speckit.plan command)
-└── tasks.md             # Phase 2 output (/speckit.tasks command - NOT created by /speckit.plan)
+├── plan.md              # This file
+├── research.md          # Phase 0 output
+├── data-model.md        # Phase 1 output
+├── quickstart.md        # Phase 1 output
+├── contracts/           # Phase 1 output
+└── tasks.md             # Phase 2 output (generated by /speckit.tasks)
 ```
 
 ### Source Code (repository root)
@@ -56,36 +53,74 @@ specs/007-lecs-hosts/
 backend/
 ├── src/app/
 │   ├── models/
-│   │   ├── lecs_host.py         # LECSHost SQLAlchemy model + LechsHostStatus enum + LechsBillingMode enum
-│   │   └── instance_type.py     # InstanceType + InstanceSpec models (static config)
+│   │   └── lecs_host.py              # NEW: LECSHost model with status enum
 │   ├── schemas/
-│   │   └── lecs_host.py         # Pydantic request/response schemas
+│   │   └── lecs_host.py              # NEW: Pydantic request/response schemas
 │   ├── services/
-│   │   └── lecs_host_service.py # Business logic: list_hosts(), create_host(), delete_host(), validate_quota()
+│   │   ├── lecs_host_service.py      # NEW: CRUD + quota validation
+│   │   └── lecs_lifecycle_service.py # NEW: async task simulation (create/shutdown/start/delete)
 │   ├── api/
-│   │   ├── lecs_host.py         # REST endpoints: GET/POST /api/v1/lecs-hosts, DELETE /api/v1/lecs-hosts/{id}
-│   │   └── deps.py              # (existing) auth dependencies reused
-│   └── main.py                  # (modified) register lecs_host router
+│   │   └── lecs_host.py              # NEW: REST routes for LECS hosts
+│   ├── main.py                       # MODIFIED: include lecs_host router + new page routes
+│   └── utils/
+│       └── validators.py             # NEW: hostname, credential, IP validation helpers
 ├── frontend/
 │   ├── templates/
-│   │   ├── lecs_host_list.html  # LECS Host List page (Jinja2)
-│   │   └── lecs_host_create.html # LECS Host Creation page (Jinja2)
+│   │   ├── lecs_host_list.html       # NEW: SSR list page with state-machine actions
+│   │   ├── lecs_host_create.html     # NEW: SSR multi-step creation page
+│   │   ├── components/               # NEW: reusable template fragments
+│   │   │   └── _lecs_host_row.html   # Host table row partial
+│   │   └── console-full.html         # MODIFIED: add "LECS主机" nav link (optional)
 │   └── static/
-│       └── css/
-│           └── console.css      # (modified) add LECS Host specific styles
-└── tests/
-    ├── unit/
-    │   └── test_lecs_host_service.py    # Unit tests for LechsService
-    ├── integration/
-    │   └── test_lecs_host_api.py        # API integration tests
-    └── e2e/
-        └── test_lecs_host_list.py       # Playwright E2E tests
+│       ├── css/
+│       │   ├── lecs-host-list.css    # NEW: list page styles
+│       │   └── lecs-host-create.css  # NEW: creation page styles
+│       └── js/
+│           └── lecs-hosts.js         # NEW: client-side logic (form validation, polling, state machine)
+├── tests/
+│   ├── test_lecs_host_api.py         # NEW: API contract + integration tests
+│   ├── test_lecs_host_service.py     # NEW: service unit tests
+│   ├── test_lecs_lifecycle.py        # NEW: lifecycle state machine tests
+│   ├── test_validators.py            # NEW: validation helper tests
+│   └── test_lecs_host_e2e.py         # NEW: Playwright E2E tests
+└── alembic/
+    └── versions/
+        └── <timestamp>_add_lecs_hosts.py  # NEW: migration for lecs_hosts table
 ```
 
-**Structure Decision**: This follows the existing project architecture exactly — new model under `backend/src/app/models/`, new service under `backend/src/app/services/`, new API router under `backend/src/app/api/`, new Jinja2 templates under `backend/frontend/templates/`. SSR pattern is reused with `require_auth` dependency. The existing `console.css` is extended with LECS-specific styles rather than creating a new CSS file to minimize asset count.
+**Structure Decision**: The project is a web application with backend API + SSR frontend. LECS host features extend the existing architecture: new model under `src/app/models/`, new schemas, new service layer, new API routes, new SSR templates under `frontend/templates/`, new static CSS/JS, and new tests following the existing pytest structure. Console search integration modifies existing `console.html` service catalog.
+
+## Research Plan
+
+The following unknowns need resolution in `research.md`:
+
+1. **Async task execution approach**: The spec mentions ~30s create, ~10s shutdown/start, ~5s delete async operations. The project uses no task queue (no Celery/RQ) currently. Options: (a) `asyncio.create_task` background tasks with state tracking, (b) simple polling-based simulation, (c) actual Celery/RQ integration. Need to decide based on project maturity.
+2. **State machine implementation**: The host lifecycle has 8 states with specific transitions. Need to define the exact state transition matrix and how to enforce it at both the API level (409 responses) and the frontend level (button disabled logic).
+3. **Console search integration**: The existing `console.html` has a vanilla JS search catalog. Need to determine how to add "LECS主机" to the service catalog data structure.
+4. **Form validation approach**: The existing project uses server-side form processing (FastAPI Form params). For the complex creation form with real-time validation, need to decide between htmx-based server-side validation or client-side JS validation with server confirmation.
+
+## Phase 1: Design & Contracts
+
+### Data Model
+- `LECSHost` entity with fields matching spec requirements
+- `HostStatus` enum with 8 states
+- State transition rules documented in `data-model.md`
+
+### API Contracts (in `/contracts/`)
+- `GET /api/v1/lecs-hosts` — paginated list with status filter
+- `POST /api/v1/lecs-hosts` — async create with body validation
+- `POST /api/v1/lecs-hosts/{id}/shutdown` — shutdown with status guard
+- `POST /api/v1/lecs-hosts/{id}/start` — start with status guard
+- `DELETE /api/v1/lecs-hosts/{id}` — soft delete with status guard
+
+### Quickstart
+- Migration setup
+- Running the updated server
+- Verifying LECS host endpoints
+
+### Agent Context Update
+- Update `AGENTS.md` SPECKIT marker after plan is finalized.
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
-
-No constitution violations. Complexity is within existing architectural patterns.
+> No constitution violations — no complexity justification required.
