@@ -178,5 +178,54 @@
             </div>
         </footer>
     </div>
+
+    <script>
+    const serviceCatalog = [
+            { category: '控制台', items: [
+                { name: 'LECS主机', action: '计算', type: 'ecs', url: '/console/lecs-hosts/list' },
+                { name: '弹性云服务器 ECS', action: '计算', type: 'ecs' },
+                { name: '裸金属服务器 BMS', action: '计算', type: 'ecs' },
+                { name: '弹性伸缩 AS', action: '计算', type: 'ecs' },
+                { name: 'Flexus应用服务器L实例', action: 'Flexus云服务', type: 'flexus' },
+                { name: 'Flexus云服务器X实例', action: 'Flexus云服务', type: 'flexus' },
+                { name: '交换数据空间 EDS', action: '大数据', type: 'data' },
+                { name: '区块链服务 BCS', action: '区块链', type: 'blockchain' },
+                { name: '弹性文件服务 SFS', action: '存储', type: 'storage' },
+                { name: '虚拟私有云 VPC', action: '网络', type: 'network' },
+                { name: '对象存储服务 OBS', action: '存储', type: 'storage' },
+            ]},
+            { category: '快捷操作', items: [
+                { name: '续费', action: '弹性云服务器 ECS' },
+                { name: '删除', action: '弹性云服务器 ECS' },
+                { name: '开机', action: '弹性云服务器 ECS' },
+                { name: '退订', action: '弹性云服务器 ECS' },
+                { name: '扩容', action: '弹性云服务器 ECS' },
+                { name: '关机', action: '弹性云服务器 ECS' },
+            ]},
+            { category: '文档', items: [
+                { name: '什么是弹性云服务器?', action: '弹性云服务器 ECS' },
+                { name: '无法登录到Windows云服务器怎么办?', action: '弹性云服务器 ECS' },
+                { name: '网站无法访问怎么办?', action: '弹性云服务器 ECS' },
+                { name: '创建ECS高频场景示例', action: '弹性云服务器 ECS' },
+                { name: 'Ping不通或丢包时如何进行链路测试?', action: '弹性云服务器 ECS' },
+                { name: '快速购买ECS', action: '弹性云服务器 ECS' },
+            ]},
+        ];
+
+        const serviceIcons = {
+            ecs: { bg: '#E87040', svg: '<rect x="3" y="5" width="14" height="10" rx="1"/><line x1="5" y1="8" x2="15" y2="8"/><line x1="5" y1="12" x2="12" y2="12"/>' },
+            flexus: { bg: '#E87040', svg: '<circle cx="10" cy="10" r="6"/><circle cx="10" cy="10" r="2"/>' },
+            data: { bg: '#43AE3E', svg: '<ellipse cx="10" cy="6" rx="6" ry="3"/><ellipse cx="10" cy="14" rx="6" ry="3"/><line x1="4" y1="6" x2="4" y2="14"/><line x1="16" y1="6" x2="16" y2="14"/>' },
+            blockchain: { bg: '#2F54EB', svg: '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>' },
+            storage: { bg: '#E8A040', svg: '<path d="M5 4h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M3 9h14"/>' },
+            network: { bg: '#2F54EB', svg: '<circle cx="10" cy="6" r="3"/><line x1="10" y1="9" x2="6" y2="15"/><line x1="10" y1="9" x2="14" y2="15"/><circle cx="6" cy="15" r="2"/><circle cx="14" cy="15" r="2"/>' },
+        };
+
+        const defaultIcon = { bg: '#999', svg: '<circle cx="10" cy="10" r="6"/>' };
+
+        function getServiceIcon(type) {
+            return serviceIcons[type] || defaultIcon;
+        }
+    </script>
 </body>
 </html>

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 import os
 import sys
 
@@ -14,7 +15,37 @@ from starlette.templating import Jinja2Templates
 
 from app.api.auth import router as auth_router
 from app.api.deps import RedirectToLogin, require_auth
+from app.api.lecs_host import router as lecs_host_router
 from app.api.login_record import router as login_record_router
+
+logger = logging.getLogger(__name__)
+
+
+async def _reset_stuck_hosts():
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.db import async_session_factory
+    from app.models.lecs_host import HostStatus, LECSHost
+
+    transitions = {
+        "creating": "failed",
+        "shutting_down": "stopped",
+        "starting": "failed",
+        "deleting": "stopped",
+    }
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(LECSHost).where(LECSHost.status.in_(list(transitions.keys())))
+        )
+        stuck_hosts = result.scalars().all()
+        for h in stuck_hosts:
+            new_status = transitions[h.status.value if isinstance(h.status, HostStatus) else h.status]
+            h.status = HostStatus(new_status)
+            h.updated_at = datetime.now(timezone.utc)
+        if stuck_hosts:
+            await session.commit()
 
 
 @asynccontextmanager
@@ -38,6 +69,8 @@ async def lifespan(app: FastAPI):
             )
             session.add(admin)
             await session.commit()
+
+    await _reset_stuck_hosts()
 
     yield
 
@@ -73,6 +106,7 @@ def health():
 
 app.include_router(login_record_router)
 app.include_router(auth_router)
+app.include_router(lecs_host_router)
 
 
 @app.get("/console", response_class=HTMLResponse)
@@ -89,6 +123,24 @@ async def console_full_page(request: Request, user=Depends(require_auth)):
     return templates.TemplateResponse(
         request,
         "console-full.html",
+        context={"user": user},
+    )
+
+
+@app.get("/console/lecs-hosts/list", response_class=HTMLResponse)
+async def lecs_host_list_page(request: Request, user=Depends(require_auth)):
+    return templates.TemplateResponse(
+        request,
+        "lecs_host_list.html",
+        context={"user": user},
+    )
+
+
+@app.get("/console/lecs-hosts/create", response_class=HTMLResponse)
+async def lecs_host_create_page(request: Request, user=Depends(require_auth)):
+    return templates.TemplateResponse(
+        request,
+        "lecs_host_create.html",
         context={"user": user},
     )
 
