@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.db import async_session_factory
 from app.models.lecs_host import HostStatus, LECSHost
 
 logger = logging.getLogger(__name__)
@@ -116,3 +117,22 @@ async def create_background_task(
 
     task = asyncio.create_task(_worker())
     _register_task(host_id, task)
+
+
+def _log_operation(host_id, user_id, action, details=""):
+    logger.info("LECS %s: host_id=%s, user_id=%s %s", action, host_id, user_id, details)
+
+
+def spawn_shutdown_task(host_id, factory, user_id):
+    _log_operation(host_id, user_id, "shutdown", "spawned")
+    return create_background_task(None, factory, host_id, "shutdown", 10, user_id)
+
+
+def spawn_start_task(host_id, factory, user_id):
+    _log_operation(host_id, user_id, "start", "spawned")
+    return create_background_task(None, factory, host_id, "start", 10, user_id)
+
+
+def spawn_delete_task(host_id, factory, user_id):
+    _log_operation(host_id, user_id, "delete", "spawned")
+    return create_background_task(None, factory, host_id, "delete", 5, user_id)

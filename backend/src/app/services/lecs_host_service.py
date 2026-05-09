@@ -131,3 +131,13 @@ async def count_user_hosts(
     )
     result = await db.execute(count_stmt)
     return result.scalar_one()
+
+
+async def hostname_exists(db: AsyncSession, user_id: uuid.UUID, hostname: str) -> bool:
+    q = select(func.count()).select_from(LECSHost).where(
+        LECSHost.user_id == user_id,
+        LECSHost.hostname == hostname,
+        LECSHost.deleted_at.is_(None),
+    )
+    result = await db.execute(q)
+    return (result.scalar() or 0) > 0
