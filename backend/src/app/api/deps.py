@@ -27,7 +27,8 @@ async def get_current_user(
     if payload is None or payload.get("sub") is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的令牌")
 
-    result = await db.execute(select(User).where(User.id == payload["sub"]))
+    from uuid import UUID
+    result = await db.execute(select(User).where(User.id == UUID(payload["sub"])))
     user = result.scalars().first()
     if user is None or user.status != UserStatus.active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用")
@@ -54,7 +55,8 @@ async def get_current_user_optional(
     if payload is None or payload.get("sub") is None:
         return None
     try:
-        result = await db.execute(select(User).where(User.id == payload["sub"]))
+        from uuid import UUID
+        result = await db.execute(select(User).where(User.id == UUID(payload["sub"])))
         user = result.scalars().first()
         if user is None or user.status != UserStatus.active:
             return None
