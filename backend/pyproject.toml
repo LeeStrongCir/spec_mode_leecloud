@@ -20,6 +20,8 @@ dependencies = [
     "aiosqlite",
     "asyncpg",
     "jinja2",
+    "alembic>=1.13",
+    "uvicorn[standard]>=0.27",
 ]
 
 [project.optional-dependencies]
