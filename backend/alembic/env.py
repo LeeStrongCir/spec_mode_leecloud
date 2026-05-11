@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.models.user import Base
 import app.models.login_record  # noqa: F401
 import app.models.session  # noqa: F401
+import app.models.lecs_host  # noqa: F401
 
 config = context.config
 

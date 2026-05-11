@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 # ---------------------------------------------------------------------------
 # Instance spec constants (not a DB model — reference data)
@@ -137,6 +138,13 @@ class HostListItem(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def _uuid_to_str(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+
 
 class HostDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -162,6 +170,13 @@ class HostDetail(BaseModel):
     deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("id", "user_id", mode="before")
+    @classmethod
+    def _uuid_to_str(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
 
 
 class PaginatedHostList(BaseModel):

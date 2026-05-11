@@ -1,0 +1,45 @@
+# Version control
+.git/
+.gitignore
+
+# OpenCode / IDE
+.opencode/
+.specify/
+.vscode/
+AGENTS.md
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+specs/
+req-templates/
+reqs/
+screanshots/
+zh-command/
+zh-have_done/
+zh-templates/
+data-testid-list.md
+backend/README.md
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Coverage / test results
+.coverage
+htmlcov/
+
+# Local dev DB
+backend/dev.db
+
+# OS files
+.DS_Store
+Thumbs.db

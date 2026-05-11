@@ -1,21 +1,21 @@
-# API Contract: LECS Host Service
+# API 合同：LECS 主机服务
 
 **Base Path**: `/api/v1/lecs-hosts`
-**Auth**: JWT Cookie (`access_token`) — all endpoints require authentication.
-**CSRF**: Protected for POST/DELETE operations.
-**Rate Limit**: 20 requests/minute per user.
+**Auth**: JWT Cookie (`access_token`) — 所有端点均需认证。
+**CSRF**: POST/DELETE 操作受保护。
+**Rate Limit**: 每用户每分钟 20 个请求。
 
 ---
 
 ## GET /api/v1/lecs-hosts
 
-**Description**: Paginated list of user's hosts (filtered: `deleted_at IS NULL`).
+**Description**: 分页列出用户的主机列表（已过滤：`deleted_at IS NULL`）。
 
-**Query Parameters**:
-| Param | Type | Required | Default | Description |
+**查询参数**：
+| 参数名 | 类型 | 是否必填 | 默认值 | 描述 |
 |-------|------|----------|---------|-------------|
-| `page` | int | No | 1 | Page number (1-indexed) |
-| `page_size` | int | No | 20 | Items per page (max 100) |
+| `page` | int | 否 | 1 | 页码（从 1 开始） |
+| `page_size` | int | 否 | 20 | 每页条数（最大 100） |
 
 **Response (200 OK)**:
 ```json
@@ -49,22 +49,22 @@
 }
 ```
 
-**Authorization**: 
-- Regular users: see only their own hosts (`WHERE user_id = current_user.id`)
-- Admin users: see all hosts
+**授权**： 
+- 普通用户：仅查看自己的主机（`WHERE user_id = current_user.id`）
+- 管理员用户：查看所有主机
 
-**Errors**:
-| Status | Body | Condition |
+**错误**：
+| 状态码 | 响应体 | 触发条件 |
 |--------|------|-----------|
-| 401 | `{"status":"error","error_code":"MISSING_TOKEN","message":"未登录"}` | No valid access_token cookie |
+| 401 | `{"status":"error","error_code":"MISSING_TOKEN","message":"未登录"}` | 无有效的 access_token cookie |
 
 ---
 
 ## POST /api/v1/lecs-hosts
 
-**Description**: Create a new LECS host (async). Returns immediately with `creating` status.
+**Description**: 创建新的 LECS 主机（异步）。立即返回 `creating` 状态。
 
-**Request Body**:
+**请求体**：
 ```json
 {
   "hostname": "web-server-01",
@@ -81,19 +81,19 @@
 }
 ```
 
-| Field | Type | Required | Validation |
+| 参数名 | 类型 | 是否必填 | 验证规则 |
 |-------|------|----------|-----------|
-| `hostname` | string | Yes | `^[\w]{4,10}$`, not starting with `_`, unique per user |
-| `billing_mode` | string | Yes | `"subscription"` or `"on_demand"` |
-| `instance_type` | string | Yes | `"economy"` or `"high_performance"` |
-| `spec_id` | string | Yes | Must be valid per instance_type |
-| `os_image` | string | Yes | `"huawei_euler"`, `"ubuntu"`, `"windows"` |
-| `ip_mode` | string | Yes | `"dhcp"` or `"manual"` |
-| `ip_address` | string | Conditional | Required if `ip_mode="manual"`, valid IPv4 |
-| `ip_mask` | int | Conditional | Required if `ip_mode="manual"`, 8–24 |
-| `username` | string | Yes | `^[a-zA-Z0-9_@.+-]{4,16}$` |
-| `password` | string | Yes | `^[a-zA-Z0-9_@#$%^&+=!-]{8,32}$` |
-| `duration` | int | Yes | 1–9, 12, or 24 |
+| `hostname` | string | 是 | `^[\w]{4,10}$`，不能以 `_` 开头，每个用户唯一 |
+| `billing_mode` | string | 是 | `"subscription"` 或 `"on_demand"` |
+| `instance_type` | string | 是 | `"economy"` 或 `"high_performance"` |
+| `spec_id` | string | 是 | 根据 instance_type 必须有效 |
+| `os_image` | string | 是 | `"huawei_euler"`、`"ubuntu"`、`"windows"` |
+| `ip_mode` | string | 是 | `"dhcp"` 或 `"manual"` |
+| `ip_address` | string | 条件性 | 当 `ip_mode="manual"` 时必填，有效的 IPv4 地址 |
+| `ip_mask` | int | 条件性 | 当 `ip_mode="manual"` 时必填，范围 8–24 |
+| `username` | string | 是 | `^[a-zA-Z0-9_@.+-]{4,16}$` |
+| `password` | string | 是 | `^[a-zA-Z0-9_@#$%^&+=!-]{8,32}$` |
+| `duration` | int | 是 | 1–9、12 或 24 |
 
 **Response (201 Created)**:
 ```json
@@ -108,23 +108,23 @@
 }
 ```
 
-**Errors**:
-| Status | Body | Condition |
+**错误**：
+| 状态码 | 响应体 | 触发条件 |
 |--------|------|-----------|
-| 400 | `{"status":"error","message":"主机名已存在"}` | Hostname already used by user |
-| 403 | `{"status":"error","error_code":"QUOTA_EXCEEDED","message":"主机数量达到上限"}` | User has 100+ non-deleted hosts |
-| 422 | `{"detail": [...]}` | Validation error on any field |
-| 500 | `{"status":"error","message":"服务内部错误"}` | Server error during task creation |
+| 400 | `{"status":"error","message":"主机名已存在"}` | 用户已使用该主机名 |
+| 403 | `{"status":"error","error_code":"QUOTA_EXCEEDED","message":"主机数量达到上限"}` | 用户拥有 100 个或更多未删除的主机 |
+| 422 | `{"detail": [...]}` | 任意字段验证错误 |
+| 500 | `{"status":"error","message":"服务内部错误"}` | 创建任务时发生服务器错误 |
 
 ---
 
 ## POST /api/v1/lecs-hosts/{id}/shutdown
 
-**Description**: Shutdown a running host (async). ~10s duration.
+**Description**: 关闭运行中的主机（异步）。耗时约 10 秒。
 
-**Path Parameters**: `id` (UUID)
+**路径参数**：`id` (UUID)
 
-**Precondition**: Host status must be `normal`.
+**前置条件**：主机状态必须为 `normal`。
 
 **Response (200 OK)**:
 ```json
@@ -138,21 +138,21 @@
 }
 ```
 
-**Errors**:
-| Status | Body | Condition |
+**错误**：
+| 状态码 | 响应体 | 触发条件 |
 |--------|------|-----------|
-| 404 | `{"status":"error","message":"主机不存在"}` | Host not found or not owned by user |
-| 409 | `{"status":"error","error_code":"INVALID_STATE","message":"仅可对运行中的主机执行关机操作"}` | Host not in `normal` state |
+| 404 | `{"status":"error","message":"主机不存在"}` | 主机不存在或不属于该用户 |
+| 409 | `{"status":"error","error_code":"INVALID_STATE","message":"仅可对运行中的主机执行关机操作"}` | 主机不处于 `normal` 状态 |
 
 ---
 
 ## POST /api/v1/lecs-hosts/{id}/start
 
-**Description**: Start a stopped or failed host (async). ~10s duration.
+**Description**: 启动已关机或失败的主机（异步）。耗时约 10 秒。
 
-**Path Parameters**: `id` (UUID)
+**路径参数**：`id` (UUID)
 
-**Precondition**: Host status must be `stopped` or `failed`.
+**前置条件**：主机状态必须为 `stopped` 或 `failed`。
 
 **Response (200 OK)**:
 ```json
@@ -166,21 +166,21 @@
 }
 ```
 
-**Errors**:
-| Status | Body | Condition |
+**错误**：
+| 状态码 | 响应体 | 触发条件 |
 |--------|------|-----------|
-| 404 | `{"status":"error","message":"主机不存在"}` | Host not found or not owned by user |
-| 409 | `{"status":"error","error_code":"INVALID_STATE","message":"仅可对已关机或创建失败的主机执行启动操作"}` | Host not in `stopped` or `failed` state |
+| 404 | `{"status":"error","message":"主机不存在"}` | 主机不存在或不属于该用户 |
+| 409 | `{"status":"error","error_code":"INVALID_STATE","message":"仅可对已关机或创建失败的主机执行启动操作"}` | 主机不处于 `stopped` 或 `failed` 状态 |
 
 ---
 
 ## DELETE /api/v1/lecs-hosts/{id}
 
-**Description**: Soft delete a host (async). Allowed only for `stopped` or `failed` hosts. ~5s duration.
+**Description**: 软删除主机（异步）。仅允许对 `stopped` 或 `failed` 状态的主机执行。耗时约 5 秒。
 
-**Path Parameters**: `id` (UUID)
+**路径参数**：`id` (UUID)
 
-**Precondition**: Host status must be `stopped` or `failed`.
+**前置条件**：主机状态必须为 `stopped` 或 `failed`。
 
 **Response (202 Accepted)**:
 ```json
@@ -194,17 +194,17 @@
 }
 ```
 
-**Errors**:
-| Status | Body | Condition |
+**错误**：
+| 状态码 | 响应体 | 触发条件 |
 |--------|------|-----------|
-| 404 | `{"status":"error","message":"主机不存在"}` | Host not found or not owned by user |
-| 403 | `{"status":"error","error_code":"NOT_STOPPED","message":"仅支持对已关机或创建失败的主机执行删除"}` | Host in `normal`, `creating`, or transitional state |
+| 404 | `{"status":"error","message":"主机不存在"}` | 主机不存在或不属于该用户 |
+| 403 | `{"status":"error","error_code":"NOT_STOPPED","message":"仅支持对已关机或创建失败的主机执行删除"}` | 主机处于 `normal`、`creating` 或过渡状态 |
 
 ---
 
 ## GET /api/v1/lecs-hosts/pricing
 
-**Description**: Return current instance spec pricing data.
+**Description**: 返回当前实例规格价格数据。
 
 **Response (200 OK)**:
 ```json
@@ -229,9 +229,9 @@
 
 ---
 
-## Shared Error Response Format
+## 通用错误响应格式
 
-All error responses follow this structure:
+所有错误响应遵循以下结构：
 
 ```json
 {
@@ -241,11 +241,11 @@ All error responses follow this structure:
 }
 ```
 
-| error_code | Meaning |
+| error_code | 含义 |
 |------------|---------|
-| `MISSING_TOKEN` | No valid auth token |
-| `QUOTA_EXCEEDED` | User has reached 100 host limit |
-| `INVALID_STATE` | Lifecycle operation not allowed for current host state |
-| `NOT_STOPPED` | Delete attempted on a non-stopped/failed host |
-| `VALIDATION_ERROR` | Request body validation failed |
-| `HOST_NOT_FOUND` | Host ID does not exist for current user |
+| `MISSING_TOKEN` | 无有效的认证令牌 |
+| `QUOTA_EXCEEDED` | 用户已达到 100 台主机上限 |
+| `INVALID_STATE` | 生命周期操作不允许在当前主机状态下执行 |
+| `NOT_STOPPED` | 尝试删除未关机或失败的主机 |
+| `VALIDATION_ERROR` | 请求体验证失败 |
+| `HOST_NOT_FOUND` | 当前用户不存在该主机 ID |

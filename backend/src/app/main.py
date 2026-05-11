@@ -104,6 +104,11 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/")
+def root():
+    return RedirectResponse(url="/login")
+
+
 app.include_router(login_record_router)
 app.include_router(auth_router)
 app.include_router(lecs_host_router)
