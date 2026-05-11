@@ -12,6 +12,8 @@ from app.models.lecs_host import HostStatus, LECSHost
 from app.schemas.lecs_host import (
     INSTANCE_SPECS,
     CreateHostRequest,
+    HostListItem,
+    PaginatedHostList,
     SpecCategory,
     SpecItem,
 )
@@ -64,8 +66,17 @@ async def list_lecs_hosts(
     db: AsyncSession = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    result = await list_hosts(db, user, page, page_size, _is_admin(user))
-    return {"status": "success", "data": result.model_dump()}
+    items, total, pg, pg_size, total_pages = await list_hosts(db, user, page, page_size, _is_admin(user))
+    return {
+        "status": "success",
+        "data": PaginatedHostList(
+            items=[HostListItem.model_validate(i) for i in items],
+            total=total,
+            page=pg,
+            page_size=pg_size,
+            total_pages=total_pages,
+        ).model_dump(),
+    }
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

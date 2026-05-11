@@ -1,56 +1,56 @@
-# Quickstart: LECS Hosts Management
+# 快速开始：LECS 主机管理
 
 **Date**: 2026-05-09
 **Feature**: 007-lecs-hosts
 
-## Prerequisites
+## 前置条件
 
 - Python 3.11+
-- Working virtual environment (see `backend/README.md`)
-- Database migrations up to date
+- 可用的虚拟环境（参见 `backend/README.md`）
+- 数据库迁移已更新至最新
 
-## Setup
+## 安装设置
 
-### 1. Navigate to backend directory
+### 1. 进入后端目录
 
 ```bash
 cd backend
 ```
 
-### 2. Install dependencies (if not already)
+### 2. 安装依赖（如果尚未安装）
 
 ```bash
 uv sync --extra dev
 ```
 
-### 3. Run database migration
+### 3. 运行数据库迁移
 
 ```bash
 uv run alembic upgrade head
 ```
 
-This creates the `lecs_hosts` table with all columns defined in the migration.
+这将创建 `lecs_hosts` 表，包含迁移中定义的所有列。
 
-### 4. Start the server
+### 4. 启动服务器
 
 ```bash
 uv run uvicorn src.app.main:app --reload --port 8000
 ```
 
-### 5. Access the pages
+### 5. 访问页面
 
-- **API documentation**: http://localhost:8000/docs
-- **Console** (search for "LECS主机"): http://localhost:8000/console-full
-- **LECS Host list page**: http://localhost:8000/console/lecs-hosts/list
-- **LECS Host create page**: http://localhost:8000/console/lecs-hosts/create
+- **API 文档**: http://localhost:8000/docs
+- **控制台**（搜索 "LECS主机"）: http://localhost:8000/console-full
+- **LECS 主机列表页**: http://localhost:8000/console/lecs-hosts/list
+- **LECS 主机创建页**: http://localhost:8000/console/lecs-hosts/create
 
-### 6. Verify via API
+### 6. 通过 API 验证
 
 ```bash
-# List hosts (requires valid access_token cookie)
+# 列出主机（需要有效的 access_token cookie）
 curl -b "access_token=<your_token>" http://localhost:8000/api/v1/lecs-hosts
 
-# Create a host
+# 创建主机
 curl -X POST -b "access_token=<your_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -68,45 +68,45 @@ curl -X POST -b "access_token=<your_token>" \
   }' \
   http://localhost:8000/api/v1/lecs-hosts
 
-# Get pricing info
+# 获取定价信息
 curl -b "access_token=<your_token>" http://localhost:8000/api/v1/lecs-hosts/pricing
 
-# Shutdown a host
+# 关闭主机
 curl -X POST -b "access_token=<your_token>" \
   http://localhost:8000/api/v1/lecs-hosts/<host_id>/shutdown
 
-# Start a host
+# 启动主机
 curl -X POST -b "access_token=<your_token>" \
   http://localhost:8000/api/v1/lecs-hosts/<host_id>/start
 
-# Delete a host (must be stopped or failed)
+# 删除主机（必须处于已停止或失败状态）
 curl -X DELETE -b "access_token=<your_token>" \
   http://localhost:8000/api/v1/lecs-hosts/<host_id>
 ```
 
-## Run Tests
+## 运行测试
 
 ```bash
-# Unit + integration tests
+# 单元测试 + 集成测试
 cd backend
 .venv/bin/python -m pytest tests/test_lecs_host* -v --cov=src/app --cov-report=html
 ```
 
-## Verification Checklist
+## 验证清单
 
-After setup, verify the following:
+完成设置后，请验证以下事项：
 
-- [ ] User can search "LECS" in console search bar and see "LECS主机" result
-- [ ] Clicking search result navigates to `/console/lecs-hosts/list`
-- [ ] List page loads (shows empty table for new users)
-- [ ] Clicking "创建ECS主机" navigates to creation page
-- [ ] Creation form validates hostname, username, password, IP input
-- [ ] Selecting a spec updates the cost display in real time
-- [ ] Clicking "立即购买" shows confirmation dialog with full summary
-- [ ] After submission, new host appears with "创建中" status
-- [ ] After ~30s, host status changes to "正常"
-- [ ] Shutdown button works on "正常" state host (status: 关机中 → 已关机)
-- [ ] Start button works on "已关机" state host (status: 启动中 → 正常)
-- [ ] Delete button is disabled for "正常" state; enabled for "已关机"
-- [ ] Soft-deleted hosts disappear from the list
-- [ ] All interactive components have `data-testid` attributes
+- [ ] 用户可以在控制台搜索栏中搜索 "LECS" 并看到 "LECS主机" 结果
+- [ ] 点击搜索结果会导航到 `/console/lecs-hosts/list`
+- [ ] 列表页正常加载（新用户显示空表格）
+- [ ] 点击 "创建ECS主机" 会导航到创建页面
+- [ ] 创建表单会验证 hostname、username、password、IP 输入
+- [ ] 选择规格后费用显示实时更新
+- [ ] 点击 "立即购买" 会显示包含完整摘要的确认对话框
+- [ ] 提交后，新主机出现并显示 "创建中" 状态
+- [ ] 约 30 秒后，主机状态变为 "正常"
+- [ ] "正常" 状态主机的关机按钮正常工作（状态：关机中 → 已关机）
+- [ ] "已关机" 状态主机的开机按钮正常工作（状态：启动中 → 正常）
+- [ ] "正常" 状态下删除按钮禁用；"已关机" 状态下启用
+- [ ] 软删除的主机从列表中消失
+- [ ] 所有交互组件都有 `data-testid` 属性
